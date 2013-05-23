@@ -1,5 +1,10 @@
 import subprocess
 
+def bits(b, n):
+    for i in xrange(b):
+        yield (n & 1)
+        n >>= 1
+
 class Var:
     def __init__(self, problem, id, negated=False):
         self.problem = problem
@@ -30,10 +35,6 @@ class Problem:
     def add_or(self, *vars):
         c = ' '.join(v.for_clause() for v in vars) + " 0"
         self.clauses.append(c)
-
-    def add_xor(self, *vars):
-        c = ' '.join(v.for_clause() for v in vars) + " 0"
-        self.clauses.append("x" + c)
 
     def dimacs(self):
         s = 'p cnf %d %d\n' % (self.free_id - 1, len(self.clauses))
@@ -174,7 +175,10 @@ class Int:
         other = self._convert_for_op(other)
         bits = [self.problem.new_var() for i in range(self.size)]
         for (a, b, o) in zip(self.bits, other.bits, bits):
-            self.problem.add_xor(a, b, -o)
+            self.problem.add_or(o, a, -b)
+            self.problem.add_or(o, -a, b)
+            self.problem.add_or(-o, a, b)
+            self.problem.add_or(-o, -a, -b)
         return Int(self.problem, self.size, bits=bits)
 
     def __rxor__(self, other):
@@ -186,3 +190,21 @@ class Int:
         for i, v in enumerate(self.bits):
             n |= int(v.model) << i
         return n
+
+class Mapping:
+    def __init__(self, problem, valbits, vals):
+        self.problem = problem
+        self.valbits = valbits
+        self.vals = vals
+
+    def __getitem__(self, inp):
+        ret = Int(self.problem, self.valbits)
+
+        for k, v in enumerate(self.vals):
+            # (inp = k) => (ret = v) with k and v consts
+            const_part = [-inp.bits[i] if b else inp.bits[i]
+                          for i, b in enumerate(bits(self.valbits, k))]
+            for b, val_b in zip(ret.bits, bits(self.valbits, v)):
+                self.problem.add_or(b if val_b else -b, *const_part)
+
+        return ret
