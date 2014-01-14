@@ -143,6 +143,8 @@ class Int:
         if isinstance(other, Int):
             raise TypeError("variable bit shift not implemented")
         other = min(other, self.size)
+        if other == 0:
+            return self
         zero_bits = Int(self.problem, other, val=0).bits
         bits = zero_bits + self.bits[:-other]
         return Int(self.problem, self.size, bits=bits)
