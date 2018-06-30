@@ -1,4 +1,5 @@
 import subprocess
+import tempfile
 
 def bits(b, n):
     for i in xrange(b):
@@ -41,23 +42,24 @@ class Problem:
         return s + '\n'.join(self.clauses)
 
     def solve(self):
-        proc = subprocess.Popen("cryptominisat", stdin=subprocess.PIPE,
-                                stdout=subprocess.PIPE)
-        stdout, stderr = proc.communicate(input=self.dimacs().encode('utf-8'))
-        stdout = stdout.decode('utf-8')
-        for l in stdout.split('\n'):
-            if not l:
-                continue
-            elif l[0] == 's':
-                if l.split()[1] == 'UNSATISFIABLE':
-                    raise RuntimeError("UNSAT")
-            elif l[0] == 'v':
-                for val in l.split()[1:-1]:
-                    if val.startswith('-'):
-                        val = (val[1:], False)
-                    else:
-                        val = (val, True)
-                    self.model[int(val[0])] = val[1]
+        f = tempfile.NamedTemporaryFile(delete=False)
+        name = f.name
+        f.write(self.dimacs())
+        f.close()
+        proc = subprocess.Popen(["yices-sat", "-m", name], stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        lines = stdout.decode('utf-8').split('\n')
+        if lines[0] != 'sat':
+            raise RuntimeError("UNSAT")
+
+        vals = lines[1].split()
+        for val in vals:
+            if val.startswith('-'):
+                val = (val[1:], False)
+            else:
+                val = (val, True)
+            self.model[int(val[0])] = val[1]
 
 class Int:
     def __init__(self, problem, size, bits=None, val=None):
